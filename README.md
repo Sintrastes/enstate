@@ -1,6 +1,6 @@
 # What is it?
 
-In short: Enstate is a #![no_std] compatible Rust library for composable and flexible zero-cost
+In short: Enstate is a `#![no_std]` compatible Rust library for composable and flexible zero-cost
  state machine abstractions. Its design is inspired by that of `std::Iterator`, as well as previous work
  I've done on how to represent composable state machines in a functional way.
 
