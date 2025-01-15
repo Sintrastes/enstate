@@ -7,7 +7,7 @@ In short: Enstate is a `#![no_std]` compatible Rust library for composable and f
 This all ultimately stems from ideas from Phil Friedman such as [Comonads As Spaces](https://blog.functorial.com/posts/2016-08-07-Comonads-As-Spaces.html)
  and [Declarative UIs are the Future — And the Future is Comonadic](https://functorial.com/the-future-is-comonadic/main.pdf) -- but made practical in a
  mainstream programming language, and extended to a new type of UI abstraction (UI workflows) which I believe is roughly dual
- (I have yet to be able to exactly formulate this idea categorically) to Phil's work with composable UI widgets.
+ (though I have yet to be able to exactly formulate this idea categorically) to Phil's work with composable UI widgets.
 
 Whatever we want to call this "dual", I think that this aspect of UI development is often overlooked in modern
  declarative UI frameworks -- leading to awkward APIs for doing something that in a declarative framework _should_
