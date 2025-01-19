@@ -26,7 +26,7 @@ impl Default for Action {
     }
 }
 
-fn example() -> impl StateMachine<Action, i32> {
+fn counter() -> impl StateMachine<Action, i32> {
     machine!(count, 0, || {
         let action = choose![Action::Increment, Action::Decrement];
         match action {
@@ -38,7 +38,7 @@ fn example() -> impl StateMachine<Action, i32> {
 
 #[test]
 fn test_example_machine() {
-    let mut machine = example();
+    let mut machine = counter();
 
     // The first action is irrelevant given the way we define state machines
     // currently.

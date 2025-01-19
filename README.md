@@ -74,12 +74,12 @@ This defines the state machine for a basic "counter" widget, an integer "count" 
  and using some nightly rust features, we can actually much more simply define this as:
 
 ```rust
-fn counter() -> impl StateMachine<Action, i32> {
+fn counter() -> impl StateMachine<CounterAction, i32> {
     machine!(count, 0, || {
-        let action = choose![Action::Increment, Action::Decrement];
+        let action = choose![CounterAction::Increment, CounterAction::Decrement];
         match action {
-            Action::Increment => count = count + 1,
-            Action::Decrement => count = count - 1,
+            CounterAction::Increment => count = count + 1,
+            CounterAction::Decrement => count = count - 1,
         }
     })
 }
