@@ -42,16 +42,16 @@ fn test_example_machine() {
 
     // The first action is irrelevant given the way we define state machines
     // currently.
-    let initial_return = pin!(&mut machine).resume(Action::Decrement);
+    let CoroutineState::Yielded(initial_return) = pin!(&mut machine).resume(Action::Decrement);
 
     let expected_actions = [Action::Increment, Action::Decrement].as_slice();
 
-    assert!(initial_return == CoroutineState::Yielded((0, expected_actions)));
+    assert!(initial_return == (0, expected_actions));
 
     // The second action should actually increment the state.
-    let second_return = pin!(&mut machine).resume(Action::Increment);
+    let CoroutineState::Yielded(second_return) = pin!(&mut machine).resume(Action::Increment);
 
     eprintln!("{:?}", &second_return);
 
-    assert!(second_return == CoroutineState::Yielded((1, expected_actions)));
+    assert!(second_return == (1, expected_actions));
 }
