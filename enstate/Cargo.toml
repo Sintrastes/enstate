@@ -1,0 +1,8 @@
+[package]
+name = "enstate"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+enstate-macros = { path = "../enstate-macros" }
+unhygienic2 = "0.1.0"
