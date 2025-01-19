@@ -70,7 +70,20 @@ impl Machine<i32> for Counter {
 ```
 
 This defines the state machine for a basic "counter" widget, an integer "count" displayed,
- with "actions" for incrementing and decrementing that count.
+ with "actions" for incrementing and decrementing that count. Using the `machine!` macro from `enstate-macros`,
+ and using some nightly rust features, we can actually much more simply define this as:
+
+```rust
+fn counter() -> impl StateMachine<Action, i32> {
+    machine!(count, 0, || {
+        let action = choose![Action::Increment, Action::Decrement];
+        match action {
+            Action::Increment => count = count + 1,
+            Action::Decrement => count = count - 1,
+        }
+    })
+}
+```
 
 What if we wanted to build a state machine for two counters, where we sum the two states? `zipWith`
 takes two machines, and builds a new machine that allows us to traverse along either the first machine's
