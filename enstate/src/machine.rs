@@ -211,14 +211,6 @@ impl<T, U, M1: Machine<Option<T>>, M2: Machine<Option<U>, Transition = M1::Trans
         }
     }
 
-    // fn state(&self) -> &Option<U> {
-    //     if self.in_second_machine {
-    //         self.machine2.state()
-    //     } else {
-    //         &None
-    //     }
-    // }
-
     fn state(&mut self) -> Option<U> {
         if self.in_second_machine {
             self.machine2.state()
@@ -288,10 +280,6 @@ impl<T: Clone, E> Machine<T> for PureMachine<T, E> {
         empty()
     }
 
-    // fn state(&self) -> &T {
-    //     &self.value
-    // }
-
     fn state(&mut self) -> T {
         self.value.clone()
     }
@@ -319,10 +307,6 @@ where
     fn edges(&self) -> impl Iterator<Item = M::Transition> {
         self.machine.edges()
     }
-
-    // fn state(&self) -> &U {
-    //     (self.f)(&self.machine.state())
-    // }
 
     fn state(&mut self) -> U {
         (self.f)(&self.machine.state()).clone()
