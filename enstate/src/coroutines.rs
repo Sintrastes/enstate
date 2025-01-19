@@ -18,10 +18,26 @@ pub trait StateMachine<Action: 'static, State> =
 ///
 /// Struct used to treat a coroutine state machine as a machine.
 ///
-struct AsMachine<A, S, M> {
-    a: PhantomData<A>,
-    state: S,
-    machine: M,
+pub struct AsMachine<A, S, M> {
+    pub a: PhantomData<A>,
+    pub state: S,
+    pub machine: M,
+}
+
+impl<State: Clone, Action: Clone + Default, M: StateMachine<Action, State> + Unpin>
+    AsMachine<Action, CoroutineState<(State, &'static [Action]), !>, M>
+{
+    pub fn new(machine: M) -> AsMachine<Action, CoroutineState<(State, &'static [Action]), !>, M> {
+        let mut machine = machine;
+        let pin = pin!(&mut machine);
+        let initial = pin.resume(Action::default());
+
+        AsMachine {
+            a: PhantomData,
+            state: initial,
+            machine,
+        }
+    }
 }
 
 impl<State: Clone, Action: Clone + Default, M: StateMachine<Action, State> + Unpin> Machine<State>
@@ -35,7 +51,7 @@ impl<State: Clone, Action: Clone + Default, M: StateMachine<Action, State> + Unp
     }
 
     fn state(&mut self) -> State {
-        match &mut self.state {
+        match &self.state {
             CoroutineState::Yielded(x) => x.0.clone(),
         }
     }

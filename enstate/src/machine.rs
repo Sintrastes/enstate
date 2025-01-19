@@ -2,6 +2,10 @@ use core::iter::empty;
 
 use core::marker::PhantomData;
 
+use zipped::ZippedMachine;
+
+pub mod zipped;
+
 ///
 /// Trait for a composable state machine with state of type T.
 ///
@@ -52,13 +56,24 @@ pub trait Machine<T>: Sized {
     /// Combine two machines "horizontally", combinding their state with a function.
     ///
     #[inline]
-    fn zip_with<M2, U, N, G, W>(self, machine2: M2, f: G) -> ZippedMachine<T, U, Self, M2, G>
+    fn zip_with_into<E, M2, U, G, W: Clone>(
+        self,
+        _event: PhantomData<E>,
+        machine2: M2,
+        f: G,
+    ) -> ZippedMachine<E, T, U, Self, M2, G>
     where
-        M2: Machine<U, Transition = Self::Transition>,
-        M2::Transition: PartialEq<Self::Transition>,
+        M2: Machine<U>,
+        // M2::Transition: PartialEq<Self::Transition>,
+        Self::Transition: Into<E>,
+        M2::Transition: Into<E>,
+        E: Clone,
+        E: TryInto<Self::Transition>,
+        E: TryInto<M2::Transition>,
         G: FnMut(T, U) -> W,
     {
         ZippedMachine {
+            e: PhantomData,
             t: PhantomData,
             u: PhantomData,
             machine1: self,
@@ -124,18 +139,16 @@ where
         }
     }
 
+    // fn state(&self) -> &Option<T> {
+    //     match &self.state {
+    //         JoinedMachineState::First(_) => &None,
+    //         JoinedMachineState::Second(m2) => m2.state(),
+    //     }
+    // }
+
     fn state(&mut self) -> Option<T> {
         match &mut self.state {
-            JoinedMachineState::First(m1) => {
-                // Try to get the second machine from the first machine's state
-                if let Some(m2) = m1.state() {
-                    self.state = JoinedMachineState::Second(m2);
-                    // Recursively call state() now that we're in the Second state
-                    self.state()
-                } else {
-                    None
-                }
-            }
+            JoinedMachineState::First(_) => None,
             JoinedMachineState::Second(m2) => m2.state(),
         }
     }
@@ -144,7 +157,17 @@ where
         match &mut self.state {
             JoinedMachineState::First(m1) => m1.traverse(edge),
             JoinedMachineState::Second(m2) => m2.traverse(edge),
-        }
+        };
+
+        // Try to get the second machine from the first machine's state
+        match &mut self.state {
+            JoinedMachineState::First(m1) => {
+                if let Some(m2) = m1.state() {
+                    self.state = JoinedMachineState::Second(m2);
+                }
+            }
+            _ => {}
+        };
     }
 }
 
@@ -187,6 +210,14 @@ impl<T, U, M1: Machine<Option<T>>, M2: Machine<Option<U>, Transition = M1::Trans
             iterator2: self.machine2.edges(),
         }
     }
+
+    // fn state(&self) -> &Option<U> {
+    //     if self.in_second_machine {
+    //         self.machine2.state()
+    //     } else {
+    //         &None
+    //     }
+    // }
 
     fn state(&mut self) -> Option<U> {
         if self.in_second_machine {
@@ -257,6 +288,10 @@ impl<T: Clone, E> Machine<T> for PureMachine<T, E> {
         empty()
     }
 
+    // fn state(&self) -> &T {
+    //     &self.value
+    // }
+
     fn state(&mut self) -> T {
         self.value.clone()
     }
@@ -274,10 +309,10 @@ pub struct MappedMachine<T, M, F> {
     f: F,
 }
 
-impl<M, F, T, U> Machine<U> for MappedMachine<T, M, F>
+impl<M, F, T, U: Clone> Machine<U> for MappedMachine<T, M, F>
 where
     M: Machine<T>,
-    F: FnMut(T) -> U,
+    F: Fn(&T) -> &U,
 {
     type Transition = M::Transition;
 
@@ -285,41 +320,15 @@ where
         self.machine.edges()
     }
 
+    // fn state(&self) -> &U {
+    //     (self.f)(&self.machine.state())
+    // }
+
     fn state(&mut self) -> U {
-        (self.f)(self.machine.state())
+        (self.f)(&self.machine.state()).clone()
     }
 
     fn traverse(&mut self, edge: &Self::Transition) {
         self.machine.traverse(edge);
-    }
-}
-
-pub struct ZippedMachine<T, U, M1, M2, F> {
-    t: PhantomData<T>,
-    u: PhantomData<U>,
-    machine1: M1,
-    machine2: M2,
-    f: F,
-}
-
-impl<M1, M2, F, T, U, V> Machine<V> for ZippedMachine<T, U, M1, M2, F>
-where
-    M1: Machine<T>,
-    M2: Machine<U, Transition = M1::Transition>,
-    F: FnMut(T, U) -> V,
-{
-    type Transition = M1::Transition;
-
-    fn edges(&self) -> impl Iterator<Item = M2::Transition> {
-        self.machine1.edges()
-    }
-
-    fn state(&mut self) -> V {
-        (self.f)(self.machine1.state(), self.machine2.state())
-    }
-
-    fn traverse(&mut self, edge: &Self::Transition) {
-        self.machine1.traverse(edge);
-        self.machine2.traverse(edge);
     }
 }
