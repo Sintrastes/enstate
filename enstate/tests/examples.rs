@@ -6,18 +6,13 @@
     exhaustive_patterns
 )]
 
-use std::{
-    marker::PhantomData,
-    ops::{Coroutine, CoroutineState},
-    pin::pin,
-    rc::Rc,
-};
+use std::marker::PhantomData;
 
 use enstate::{
-    coroutines::{AsMachine, StateMachine},
-    machine::Machine,
+    coroutines::ChainStateMachine,
+    machine::{ChainMachine, Machine},
 };
-use enstate_macros::machine;
+use enstate_macros::{machine, machine_chain};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Action {
@@ -31,7 +26,7 @@ impl Default for Action {
     }
 }
 
-fn counter() -> impl StateMachine<Action, i32> {
+fn counter() -> impl Machine<i32, Transition = Action> {
     machine!(count, 0, || {
         let action = choose![Action::Increment, Action::Decrement];
         match action {
@@ -54,7 +49,7 @@ impl Default for VendingAction {
     }
 }
 
-fn vending_machine() -> impl StateMachine<VendingAction, u32> {
+fn vending_machine() -> impl Machine<u32, Transition = VendingAction> {
     machine!(coins, 0, || {
         let action = choose![
             VendingAction::InsertCoin,
@@ -77,44 +72,29 @@ fn vending_machine() -> impl StateMachine<VendingAction, u32> {
 fn vending_machine_example() {
     let mut machine = vending_machine();
 
-    let CoroutineState::Yielded(initial) = pin!(&mut machine).resume(VendingAction::InsertCoin);
-    assert!(initial.0 == 0);
+    assert_eq!(machine.state(), 0);
 
-    let CoroutineState::Yielded(after_insert) =
-        pin!(&mut machine).resume(VendingAction::InsertCoin);
-    assert!(after_insert.0 == 1);
+    machine.traverse(&VendingAction::InsertCoin);
+    assert_eq!(machine.state(), 1);
 
-    let CoroutineState::Yielded(after_select) =
-        pin!(&mut machine).resume(VendingAction::SelectItem);
-    assert!(after_select.0 == 1); // Not enough coins
+    machine.traverse(&VendingAction::SelectItem);
+    assert_eq!(machine.state(), 1); // Not enough coins
 
-    let CoroutineState::Yielded(after_insert2) =
-        pin!(&mut machine).resume(VendingAction::InsertCoin);
-    assert!(after_insert2.0 == 2);
+    machine.traverse(&VendingAction::InsertCoin);
+    assert_eq!(machine.state(), 2);
 
-    let CoroutineState::Yielded(after_purchase) =
-        pin!(&mut machine).resume(VendingAction::SelectItem);
-    assert!(after_purchase.0 == 0); // Purchase successful
+    machine.traverse(&VendingAction::SelectItem);
+    assert_eq!(machine.state(), 0); // Purchase successful
 }
 
 #[test]
 fn counter_example() {
     let mut machine = counter();
 
-    // The first action is irrelevant given the way we define state machines
-    // currently.
-    let CoroutineState::Yielded(initial_return) = pin!(&mut machine).resume(Action::Decrement);
+    assert_eq!(machine.state(), 0);
 
-    let expected_actions = [Action::Increment, Action::Decrement].as_slice();
-
-    assert!(initial_return == (0, expected_actions));
-
-    // The second action should actually increment the state.
-    let CoroutineState::Yielded(second_return) = pin!(&mut machine).resume(Action::Increment);
-
-    eprintln!("{:?}", &second_return);
-
-    assert!(second_return == (1, expected_actions));
+    machine.traverse(&Action::Increment);
+    assert_eq!(machine.state(), 1);
 }
 
 /// Modal dialog example.
@@ -134,7 +114,7 @@ enum CountDialogAction {
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 enum ModalAction {
     Ok,
-    Cancelled,
+    Cancel,
 }
 
 impl From<ModalAction> for CountDialogAction {
@@ -189,30 +169,23 @@ struct ModalState<T> {
     result: Option<T>,
 }
 
-impl<T> Machine<Option<fn(T) -> ModalResult<T>>> for ModalState<fn(T) -> ModalResult<T>> {
-    type Transition = ModalAction;
+fn modal<T: Clone>() -> impl ChainMachine<Option<fn(T) -> ModalResult<T>>, Transition = ModalAction>
+{
+    machine_chain!(|| {
+        let action = yield [ModalAction::Ok, ModalAction::Cancel].as_slice();
 
-    fn edges(&self) -> impl Iterator<Item = Self::Transition> {
-        vec![ModalAction::Ok, ModalAction::Cancelled].into_iter()
-    }
-
-    fn state(&mut self) -> Option<fn(T) -> ModalResult<T>> {
-        self.result.clone()
-    }
-
-    fn traverse(&mut self, edge: &Self::Transition) {
-        match edge {
-            ModalAction::Cancelled => self.result = Some(|_| ModalResult::Cancelled),
-            ModalAction::Ok => self.result = Some(|state| ModalResult::Ok(state)),
+        match action {
+            ModalAction::Ok => |state| ModalResult::Ok(state),
+            ModalAction::Cancel => |_| ModalResult::Cancelled,
         }
-    }
+    })
 }
 
 #[test]
 fn modal_dialog_example() {
-    let contents = AsMachine::new(counter());
+    let contents = counter();
 
-    let dialog = ModalState { result: None };
+    let dialog = modal();
 
     let mut machine = dialog.zip_with_into(
         PhantomData::<CountDialogAction>,
@@ -233,9 +206,9 @@ fn modal_dialog_example() {
 
     assert_eq!(machine.state(), Some(ModalResult::Ok(-1)));
 
-    let contents = AsMachine::new(counter());
+    let contents = counter();
 
-    let dialog = ModalState { result: None };
+    let dialog = modal();
 
     let mut machine =
         dialog.zip_with_into(

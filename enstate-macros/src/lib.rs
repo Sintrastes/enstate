@@ -33,6 +33,22 @@ impl Parse for MachineMacroInput {
     }
 }
 
+///
+/// Macro to build a "standard" state machine without stopping
+///  conditions.
+///
+/// This macro takes an identifier to use for the state of the
+///  machine, an initial value for the state, and a closure taking
+///  no arguments, which will be the main loop of the state machine.
+///
+/// Inside the closure, there should be at least one `choose!`
+///  statement, which prompts the executor of the state machine
+///  to choose between a finte number of action to perform, and
+///  returns the action that was selected.
+///
+/// A `choose!` statement also yields the current value of the state
+///  variable back to the caller.
+///
 #[proc_macro]
 pub fn machine(input: TokenStream) -> TokenStream {
     let MachineMacroInput {
@@ -75,15 +91,33 @@ pub fn machine(input: TokenStream) -> TokenStream {
     };
     syn::visit_mut::visit_expr_mut(&mut visitor, &mut transformed_body);
 
-    let expanded = quote! {
-        #[coroutine]
-        |_| {
-            let mut #state_var = #initial_value;
-            loop {
-                #transformed_body
+    quote! {
+        enstate::coroutines::AsMachine::new(
+            #[coroutine]
+            |_| {
+                let mut #state_var = #initial_value;
+                loop {
+                    #transformed_body
+                }
             }
-        }
-    };
+        )
+    }
+    .into()
+}
 
-    expanded.into()
+#[proc_macro]
+pub fn machine_chain(input: TokenStream) -> TokenStream {
+    let closure = parse_macro_input!(input as syn::ExprClosure);
+
+    let body = closure.body;
+
+    quote! {
+        enstate::coroutines::AsChainMachine::new(
+            #[coroutine]
+            |_| {
+                #body
+            }
+        )
+    }
+    .into()
 }
