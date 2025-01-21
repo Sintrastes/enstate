@@ -1,4 +1,5 @@
 #![feature(coroutines, stmt_expr_attributes, coroutine_trait, trait_alias)]
+#![no_std]
 
 use proc_macro::TokenStream;
 use quote::quote;

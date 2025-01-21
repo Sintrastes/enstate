@@ -7,6 +7,7 @@
 )]
 
 mod examples {
+    mod chaining;
     mod counter;
     mod modal_dialog;
     mod vending_machine;

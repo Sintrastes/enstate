@@ -1,4 +1,4 @@
-use std::{
+use core::{
     marker::PhantomData,
     ops::{Coroutine, CoroutineState},
     pin::pin,
@@ -102,7 +102,7 @@ impl<A: Clone + Default, R: Clone, M: ChainStateMachine<A, R> + Unpin> Machine<O
 
     fn state(&mut self) -> Option<R> {
         match &self.state {
-            CoroutineState::Complete(result) => Some(result.to_owned()),
+            CoroutineState::Complete(result) => Some(result.clone()),
             _ => None,
         }
     }

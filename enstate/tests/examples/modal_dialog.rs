@@ -1,6 +1,7 @@
 use std::marker::PhantomData;
 
-use enstate::machine::{ChainMachine, Machine};
+use enstate::machine::Machine;
+use enstate::machine::chained::Chainable;
 use enstate_macros::machine_chain;
 
 use crate::examples::counter::counter;
@@ -8,19 +9,19 @@ use crate::examples::counter::counter;
 use super::counter::Action;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-enum ModalResult<T> {
+pub enum ModalResult<T> {
     Ok(T),
     Cancelled,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
-enum CountDialogAction {
+pub enum CountDialogAction {
     Buttons(ModalAction),
     Display(Action),
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
-enum ModalAction {
+pub enum ModalAction {
     Ok,
     Cancel,
 }
@@ -73,7 +74,7 @@ impl Default for ModalAction {
 /// This implementation requires a bit overhead (Rc and trait objects), but perhaps
 ///  there is a way to improve on this.
 ///
-fn modal<T: Clone>() -> impl ChainMachine<Option<fn(T) -> ModalResult<T>>, Transition = ModalAction>
+pub fn modal<T: Clone>() -> impl Chainable<Option<fn(T) -> ModalResult<T>>, Transition = ModalAction>
 {
     machine_chain!(|| {
         let action = yield [ModalAction::Ok, ModalAction::Cancel].as_slice();

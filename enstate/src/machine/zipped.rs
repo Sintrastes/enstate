@@ -1,9 +1,8 @@
-use std::marker::PhantomData;
+use core::marker::PhantomData;
 
 use super::Machine;
 
-pub struct ZippedMachine<E, T, U, M1, M2, F> {
-    pub(crate) e: PhantomData<E>,
+pub struct ZippedMachine<T, U, M1, M2, F> {
     pub(crate) t: PhantomData<T>,
     pub(crate) u: PhantomData<U>,
     pub(crate) machine1: M1,
@@ -11,21 +10,16 @@ pub struct ZippedMachine<E, T, U, M1, M2, F> {
     pub(crate) f: F,
 }
 
-impl<E, M1, M2, F, T, U, V> Machine<V> for ZippedMachine<E, T, U, M1, M2, F>
+impl<M1, M2, F, T, U, V> Machine<V> for ZippedMachine<T, U, M1, M2, F>
 where
     M1: Machine<T>,
-    M2: Machine<U>,
-    M1::Transition: Into<E>,
-    M2::Transition: Into<E>,
-    E: Clone,
-    E: TryInto<M1::Transition>,
-    E: TryInto<M2::Transition>,
+    M2: Machine<U, Transition = M1::Transition>,
     F: FnMut(T, U) -> V,
 {
-    type Transition = E;
+    type Transition = M1::Transition;
 
-    fn edges(&self) -> impl Iterator<Item = E> {
-        self.machine1.edges().map(|x| x.into())
+    fn edges(&self) -> impl Iterator<Item = M1::Transition> {
+        self.machine1.edges()
     }
 
     fn state(&mut self) -> V {
@@ -36,15 +30,8 @@ where
         (self.f)(state1, state2)
     }
 
-    fn traverse(&mut self, edge: &E) {
-        let result: Result<M1::Transition, _> = edge.clone().try_into();
-        if let Ok(edge) = result {
-            self.machine1.traverse(&edge);
-        }
-
-        let result: Result<M2::Transition, _> = edge.clone().try_into();
-        if let Ok(edge) = result {
-            self.machine2.traverse(&edge);
-        }
+    fn traverse(&mut self, edge: &M1::Transition) {
+        self.machine1.traverse(&edge);
+        self.machine2.traverse(&edge);
     }
 }
