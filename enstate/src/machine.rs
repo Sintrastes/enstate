@@ -1,5 +1,3 @@
-use core::iter::empty;
-
 use core::marker::PhantomData;
 
 use mapped::{MappedMachine, MappedTransitionMachine};
@@ -20,7 +18,7 @@ pub mod zipped;
 pub trait Machine<T>: Sized {
     type Transition;
 
-    ///
+    ///x
     /// Get the possible edges which can be used to transition
     /// out of the current state of the machine.
     ///

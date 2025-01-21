@@ -9,13 +9,30 @@ use super::Machine;
 pub trait Chainable<T>: Machine<T> {
     type Result<X>;
 
-    fn chain<U, M2>(self, next: M2) -> impl Machine<Self::Result<U>>
+    fn chain<U, M2>(self, next: M2) -> impl Machine<Self::Result<U>, Transition = Self::Transition>
     where
         M2: Machine<Self::Result<U>, Transition = Self::Transition>;
 }
 
 pub trait JoinMachine<M1, T> {
     fn join(self) -> impl Machine<T>;
+}
+
+pub trait FlatMappable<AX, F, BX>: Machine<AX> {
+    fn flat_map(self, f: F) -> impl Machine<BX, Transition = Self::Transition>;
+}
+
+impl<
+    A,
+    B,
+    M1: Machine<Option<A>>,
+    M2: Machine<Option<B>, Transition = M1::Transition>,
+    F: FnMut(A) -> M2,
+> FlatMappable<Option<A>, F, Option<B>> for M1
+{
+    fn flat_map(self, mut f: F) -> impl Machine<Option<B>, Transition = Self::Transition> {
+        self.map(move |x| x.map(&mut f)).join()
+    }
 }
 
 pub enum JoinedMachineState<M1, M2> {
@@ -174,7 +191,7 @@ impl<T, M1: Machine<Option<T>>, M2: Machine<Option<M1>, Transition = M1::Transit
     JoinMachine<M1, Option<T>> for M2
 {
     #[inline]
-    fn join(self) -> impl Machine<Option<T>>
+    fn join(self) -> impl Machine<Option<T>, Transition = M2::Transition>
     where
         Self: Machine<Option<M1>>,
     {
@@ -186,7 +203,7 @@ impl<T, M1: Machine<Option<T>>, M2: Machine<Option<M1>, Transition = M1::Transit
 }
 
 #[inline]
-fn pure<T: Clone, E>(value: T) -> impl Machine<T> {
+pub fn pure<T: Clone, E>(value: T) -> impl Machine<T, Transition = E> {
     PureMachine {
         e: PhantomData::<E>,
         value,

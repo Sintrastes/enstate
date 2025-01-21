@@ -12,10 +12,10 @@ pub struct MappedMachine<T, M, F> {
     pub f: F,
 }
 
-impl<M, F, T, U: Clone> Machine<U> for MappedMachine<T, M, F>
+impl<M, F, T, U> Machine<U> for MappedMachine<T, M, F>
 where
     M: Machine<T>,
-    F: Fn(&T) -> &U,
+    F: FnMut(T) -> U,
 {
     type Transition = M::Transition;
 
@@ -24,7 +24,7 @@ where
     }
 
     fn state(&mut self) -> U {
-        (self.f)(&self.machine.state()).clone()
+        (self.f)(self.machine.state())
     }
 
     fn traverse(&mut self, edge: &Self::Transition) {
