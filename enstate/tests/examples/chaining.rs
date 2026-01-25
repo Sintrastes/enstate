@@ -1,5 +1,6 @@
 use enstate::machine::chained::{Chainable, pure};
 use enstate::machine::{Machine, chained::FlatMappable};
+use enstate::optics::Prism;
 
 use crate::examples::{
     counter::{Action, counter},
@@ -8,28 +9,30 @@ use crate::examples::{
 
 #[test]
 fn chained_modal_dialog_example() {
+    let modal_prism = Prism::new(
+        |x| match x {
+            CountDialogAction::Buttons(modal_action) => Some(modal_action),
+            CountDialogAction::Display(_) => None,
+        },
+        |x| CountDialogAction::Buttons(x),
+    );
+
+    let counter_prism = Prism::new(
+        |x| match x {
+            CountDialogAction::Buttons(_) => None,
+            CountDialogAction::Display(action) => Some(action),
+        },
+        |x| CountDialogAction::Display(x),
+    );
+
     let dialog = || {
-        modal()
-            .map_actions(
-                |x| CountDialogAction::Buttons(x),
-                |x| match x {
-                    CountDialogAction::Buttons(modal_action) => Some(modal_action),
-                    CountDialogAction::Display(_) => None,
-                },
-            )
-            .zip_with(
-                counter().map_actions(
-                    |x| CountDialogAction::Display(x),
-                    |x| match x {
-                        CountDialogAction::Buttons(_) => None,
-                        CountDialogAction::Display(action) => Some(action),
-                    },
-                ),
-                |dialog_state, count| match dialog_state {
-                    Some(f) => Some((f.clone())(count)),
-                    None => None,
-                },
-            )
+        modal().lift(&modal_prism).zip_with(
+            counter().lift(&counter_prism),
+            |dialog_state, count| match dialog_state {
+                Some(f) => Some((f.clone())(count)),
+                None => None,
+            },
+        )
     };
 
     let mut machine = dialog().chain(dialog());
@@ -59,28 +62,30 @@ fn chained_modal_dialog_example() {
 
 #[test]
 fn flat_mapped_modal_dialog_example() {
+    let modal_prism = Prism::new(
+        |x| match x {
+            CountDialogAction::Buttons(modal_action) => Some(modal_action),
+            CountDialogAction::Display(_) => None,
+        },
+        |x| CountDialogAction::Buttons(x),
+    );
+
+    let counter_prism = Prism::new(
+        |x| match x {
+            CountDialogAction::Buttons(_) => None,
+            CountDialogAction::Display(action) => Some(action),
+        },
+        |x| CountDialogAction::Display(x),
+    );
+
     let dialog = || {
-        modal()
-            .map_actions(
-                |x| CountDialogAction::Buttons(x),
-                |x| match x {
-                    CountDialogAction::Buttons(modal_action) => Some(modal_action),
-                    CountDialogAction::Display(_) => None,
-                },
-            )
-            .zip_with(
-                counter().map_actions(
-                    |x| CountDialogAction::Display(x),
-                    |x| match x {
-                        CountDialogAction::Buttons(_) => None,
-                        CountDialogAction::Display(action) => Some(action),
-                    },
-                ),
-                |dialog_state, count| match dialog_state {
-                    Some(f) => Some((f.clone())(count)),
-                    None => None,
-                },
-            )
+        modal().lift(&modal_prism).zip_with(
+            counter().lift(&counter_prism),
+            |dialog_state, count| match dialog_state {
+                Some(f) => Some((f.clone())(count)),
+                None => None,
+            },
+        )
     };
 
     let mut machine = dialog().flat_map(|first_result| match first_result {

@@ -9,3 +9,4 @@
 
 pub mod coroutines;
 pub mod machine;
+pub mod optics;

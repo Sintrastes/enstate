@@ -3,6 +3,8 @@ use core::marker::PhantomData;
 use mapped::{MappedMachine, MappedTransitionMachine};
 use zipped::ZippedMachine;
 
+use crate::optics::{IsPrism, Prism};
+
 pub mod chained;
 pub mod mapped;
 pub mod zipped;
@@ -18,7 +20,7 @@ pub mod zipped;
 pub trait Machine<T>: Sized {
     type Transition;
 
-    ///x
+    ///
     /// Get the possible edges which can be used to transition
     /// out of the current state of the machine.
     ///
@@ -54,51 +56,25 @@ pub trait Machine<T>: Sized {
     }
 
     ///
-    /// Transform the state of a machine by applying a function.
+    /// Transform a machine by embedding the events into a larger
+    ///  type of events.
     ///
     #[inline]
-    fn map_actions<F, G, E>(self, f: F, g: G) -> MappedTransitionMachine<T, Self, F, G>
-    where
-        F: Fn(Self::Transition) -> E,
-        G: Fn(E) -> Option<Self::Transition>,
-    {
+    fn lift<E: Clone, P: IsPrism<Self::Transition, E>>(
+        self,
+        prism: &P,
+    ) -> impl Machine<T, Transition = E> {
         MappedTransitionMachine {
             t: PhantomData,
             machine: self,
-            f,
-            g,
+            f: |x| prism.upcast(x),
+            g: |x| prism.downcast(x),
         }
     }
 
     ///
     /// Combine two machines "horizontally", combinding their state with a function.
     ///
-    #[inline]
-    fn zip_with_into<E, M2, U, G, W: Clone>(
-        self,
-        _event: PhantomData<E>,
-        machine2: M2,
-        f: G,
-    ) -> impl Machine<W, Transition = E>
-    where
-        M2: Machine<U>,
-        // M2::Transition: PartialEq<Self::Transition>,
-        Self::Transition: Into<E>,
-        M2::Transition: Into<E>,
-        E: Clone,
-        E: TryInto<Self::Transition>,
-        E: TryInto<M2::Transition>,
-        G: FnMut(T, U) -> W,
-    {
-        ZippedMachine {
-            t: PhantomData,
-            u: PhantomData,
-            machine1: self.map_actions(|x| x.into(), |x| x.try_into().ok()),
-            machine2: machine2.map_actions(|x| x.into(), |x| x.try_into().ok()),
-            f,
-        }
-    }
-
     #[inline]
     fn zip_with<M2, U, G, W: Clone>(
         self,

@@ -2,6 +2,7 @@ use std::marker::PhantomData;
 
 use enstate::machine::Machine;
 use enstate::machine::chained::Chainable;
+use enstate::optics::Prism;
 use enstate_macros::machine_chain;
 
 use crate::examples::counter::counter;
@@ -24,40 +25,6 @@ pub enum CountDialogAction {
 pub enum ModalAction {
     Ok,
     Cancel,
-}
-
-impl From<ModalAction> for CountDialogAction {
-    fn from(value: ModalAction) -> Self {
-        CountDialogAction::Buttons(value)
-    }
-}
-
-impl From<Action> for CountDialogAction {
-    fn from(value: Action) -> Self {
-        CountDialogAction::Display(value)
-    }
-}
-
-impl TryInto<Action> for CountDialogAction {
-    type Error = ();
-
-    fn try_into(self) -> Result<Action, Self::Error> {
-        match self {
-            CountDialogAction::Display(action) => Ok(action),
-            _ => Err(()),
-        }
-    }
-}
-
-impl TryInto<ModalAction> for CountDialogAction {
-    type Error = ();
-
-    fn try_into(self) -> Result<ModalAction, Self::Error> {
-        match self {
-            CountDialogAction::Buttons(action) => Ok(action),
-            _ => Err(()),
-        }
-    }
 }
 
 impl Default for ModalAction {
@@ -88,18 +55,30 @@ pub fn modal<T: Clone>() -> impl Chainable<Option<fn(T) -> ModalResult<T>>, Tran
 
 #[test]
 fn modal_dialog_example() {
-    let contents = counter();
-
-    let dialog = modal();
-
-    let mut machine = dialog.zip_with_into(
-        PhantomData::<CountDialogAction>,
-        contents,
-        |dialog_state, count| match dialog_state {
-            Some(f) => Some((f.clone())(count)),
-            None => None,
+    let modal_prism = Prism::new(
+        |x| match x {
+            CountDialogAction::Buttons(modal_action) => Some(modal_action),
+            CountDialogAction::Display(_) => None,
         },
+        |x| CountDialogAction::Buttons(x),
     );
+
+    let counter_prism = Prism::new(
+        |x| match x {
+            CountDialogAction::Buttons(_) => None,
+            CountDialogAction::Display(action) => Some(action),
+        },
+        |x| CountDialogAction::Display(x),
+    );
+
+    let contents = counter().lift(&counter_prism);
+
+    let dialog = modal().lift(&modal_prism);
+
+    let mut machine = dialog.zip_with(contents, |dialog_state, count| match dialog_state {
+        Some(f) => Some((f.clone())(count)),
+        None => None,
+    });
 
     assert_eq!(machine.state(), None);
 
@@ -111,19 +90,14 @@ fn modal_dialog_example() {
 
     assert_eq!(machine.state(), Some(ModalResult::Ok(-1)));
 
-    let contents = counter();
+    let contents = counter().lift(&counter_prism);
 
-    let dialog = modal();
+    let dialog = modal().lift(&modal_prism);
 
-    let mut machine =
-        dialog.zip_with_into(
-            PhantomData,
-            contents,
-            |dialog_state, count| match dialog_state {
-                Some(f) => Some((f.clone())(count)),
-                None => None,
-            },
-        );
+    let mut machine = dialog.zip_with(contents, |dialog_state, count| match dialog_state {
+        Some(f) => Some((f.clone())(count)),
+        None => None,
+    });
 
     assert_eq!(machine.state(), None);
 

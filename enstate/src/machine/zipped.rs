@@ -24,7 +24,6 @@ where
 
     fn state(&mut self) -> V {
         let state1 = self.machine1.state();
-
         let state2 = self.machine2.state();
 
         (self.f)(state1, state2)
