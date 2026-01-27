@@ -21,13 +21,14 @@ pub trait ChainStateMachine<Action: 'static, Result> =
 ///
 /// Struct used to treat a coroutine state machine as a machine.
 ///
+// Note: Needs to be public for machine macro to work?
 pub struct AsMachine<A, S, M> {
     pub a: PhantomData<A>,
     pub state: S,
     pub machine: M,
 }
 
-impl<State: Clone, Action: Clone + Default, M: StateMachine<Action, State> + Unpin>
+impl<State: Clone, Action: Copy + Default, M: StateMachine<Action, State> + Unpin>
     AsMachine<Action, CoroutineState<(State, &'static [Action]), !>, M>
 {
     pub fn new(machine: M) -> AsMachine<Action, CoroutineState<(State, &'static [Action]), !>, M> {
@@ -43,67 +44,80 @@ impl<State: Clone, Action: Clone + Default, M: StateMachine<Action, State> + Unp
     }
 }
 
-impl<State: Clone, Action: Clone + Default, M: StateMachine<Action, State> + Unpin> Machine<State>
+impl<State: Clone, Action: Copy + Default, M: StateMachine<Action, State> + Unpin> Machine<State>
     for AsMachine<Action, CoroutineState<(State, &'static [Action]), !>, M>
 {
     type Transition = Action;
 
     fn edges(&self) -> impl Iterator<Item = Self::Transition> {
         let CoroutineState::Yielded(result) = &self.state;
-        result.1.into_iter().map(|x| x.clone())
+        result.1.into_iter().copied()
     }
 
-    fn state(&mut self) -> State {
+    fn state(&self) -> &State {
         match &self.state {
-            CoroutineState::Yielded(x) => x.0.clone(),
+            CoroutineState::Yielded(x) => &x.0,
         }
     }
 
-    fn traverse(&mut self, edge: &Self::Transition) {
-        self.state = pin!(&mut self.machine).resume(edge.clone());
+    fn traverse(&mut self, edge: Self::Transition) {
+        self.state = pin!(&mut self.machine).resume(edge);
     }
 }
 
+// Note: Needs to be public for macro to work?
 pub struct AsChainMachine<A: 'static, R, M> {
     pub a: PhantomData<A>,
-    pub state: CoroutineState<&'static [A], R>,
+    pub edges: &'static [A],
+    pub result: Option<R>,
     pub machine: M,
 }
 
-impl<A: Clone + Default, R, M: ChainStateMachine<A, R> + Unpin> AsChainMachine<A, R, M> {
+impl<A: Copy + Default, R, M: ChainStateMachine<A, R> + Unpin> AsChainMachine<A, R, M> {
     pub fn new(machine: M) -> AsChainMachine<A, R, M> {
         let mut machine = machine;
         let pin = pin!(&mut machine);
         let initial = pin.resume(A::default());
 
+        let (edges, result) = match initial {
+            CoroutineState::Yielded(actions) => (actions, None),
+            CoroutineState::Complete(r) => (&[] as &[A], Some(r)),
+        };
+
         AsChainMachine {
             a: PhantomData,
-            state: initial,
+            edges,
+            result,
             machine,
         }
     }
 }
 
-impl<A: Clone + Default, R: Clone, M: ChainStateMachine<A, R> + Unpin> Machine<Option<R>>
+impl<A: Copy + Default, R, M: ChainStateMachine<A, R> + Unpin> Machine<Option<R>>
     for AsChainMachine<A, R, M>
 {
     type Transition = A;
 
     fn edges(&self) -> impl Iterator<Item = A> {
-        match &self.state {
-            CoroutineState::Yielded(actions) => actions.iter().cloned(),
-            CoroutineState::Complete(_) => [].iter().cloned(),
+        self.edges.iter().copied()
+    }
+
+    fn traverse(&mut self, edge: A) {
+        let new_state = pin!(&mut self.machine).resume(edge);
+
+        match new_state {
+            CoroutineState::Yielded(actions) => {
+                self.edges = actions;
+                self.result = None;
+            }
+            CoroutineState::Complete(r) => {
+                self.edges = &[];
+                self.result = Some(r);
+            }
         }
     }
 
-    fn traverse(&mut self, edge: &A) {
-        self.state = pin!(&mut self.machine).resume(edge.clone());
-    }
-
-    fn state(&mut self) -> Option<R> {
-        match &self.state {
-            CoroutineState::Complete(result) => Some(result.clone()),
-            _ => None,
-        }
+    fn state(&self) -> &Option<R> {
+        &self.result
     }
 }

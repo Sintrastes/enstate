@@ -56,11 +56,11 @@ impl Machine<i32> for Counter {
             .chain(std::iter::once(Decrement))
     }
 
-    fn state(&mut self) -> i32 {
-        self.count
+    fn state(&self) -> &i32 {
+        &self.count
     }
 
-    fn traverse(&mut self, edge: &Self::Transition) {
+    fn traverse(&mut self, edge: Self::Transition) {
         match edge {
             CounterAction::Increment => self.count += 1,
             CounterAction::Decrement => self.count -= 1,
@@ -103,7 +103,7 @@ let counter2 = Counter { count: 1 }
     .lift(|event| Counter2(event));
 
 let adder = counter1
-    .zipWith(counter2, |count1, count2| count1 + count2 );
+    .zipWith(counter2, |count1, count2| count1 + count2);
 ```
 
 For those familiar with abstractions from functional programming, this essentially makes
@@ -140,3 +140,23 @@ impl Machine<Option<ModalResult<i32>>> for ModalState {
     ...
 }
 ```
+
+## Connections to the literature
+
+After making this library, I noticed that there are actually a lot of parallels with [Monadic Stream Functions](https://ivanperez.io/papers/2016-HaskellSymposium-Perez-Barenz-Nilsson-FRPRefactored-short.pdf). This is perhaps not super surprising, since in fact, I believe that a Rust 
+`Coroutine<A, Yield = B, Return = !>` is essentially isomorphic to a
+`MSF IO a b` (fixed to `IO`, since Rust functions are impure), and this library has the capability to use Rust coroutines as syntax for `Machine`s.
+
+In the future, I might add support for some kind of effect system on top of `Machine`s somehow, to make this library even closer to MSFs.
+
+## Generative AI Disclosure
+
+I started this project before generative AI was (in my opinion) very good as a developer assistant. The ideas are my own, and are based on various research and prototypes I've done over the years. However, changes from 2026 onward are written with the assistance of agentic AI.
+
+I view AI as a useful tool for rapid prototyping, and for assistance in writing boilerplate (especially for a project I work on soley in my free time). This is in no way a replacement for an experienced software engineer, and all generated code is reviewed and kept to my own personal standards.
+
+All high-level documentation (such as this README, and any tutorials I may write in the future) is my own prose, as I personally find LLM-generated documentation overly-verbose and infuriating to read. Some API docs are generated with the help of AI, but possibly edited to be a bit less verbose.
+
+If you use want to use this in production, you are fully responsible 
+ for testing and evaluating this software, and ensuring it meets your
+ own standards. For more info please read the `LICENSE`.

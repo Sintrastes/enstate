@@ -37,17 +37,17 @@ fn vending_machine() -> impl Machine<u32, Transition = VendingAction> {
 fn vending_machine_example() {
     let mut machine = vending_machine();
 
-    assert_eq!(machine.state(), 0);
+    assert_eq!(*machine.state(), 0);
 
-    machine.traverse(&VendingAction::InsertCoin);
-    assert_eq!(machine.state(), 1);
+    machine.traverse(VendingAction::InsertCoin);
+    assert_eq!(*machine.state(), 1);
 
-    machine.traverse(&VendingAction::SelectItem);
-    assert_eq!(machine.state(), 1); // Not enough coins
+    machine.traverse(VendingAction::SelectItem);
+    assert_eq!(*machine.state(), 1); // Not enough coins
 
-    machine.traverse(&VendingAction::InsertCoin);
-    assert_eq!(machine.state(), 2);
+    machine.traverse(VendingAction::InsertCoin);
+    assert_eq!(*machine.state(), 2);
 
-    machine.traverse(&VendingAction::SelectItem);
-    assert_eq!(machine.state(), 0); // Purchase successful
+    machine.traverse(VendingAction::SelectItem);
+    assert_eq!(*machine.state(), 0); // Purchase successful
 }

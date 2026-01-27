@@ -1,5 +1,3 @@
-use std::marker::PhantomData;
-
 use enstate::machine::Machine;
 use enstate::machine::chained::Chainable;
 use enstate::optics::Prism;
@@ -76,36 +74,36 @@ fn modal_dialog_example() {
     let dialog = modal().lift(&modal_prism);
 
     let mut machine = dialog.zip_with(contents, |dialog_state, count| match dialog_state {
-        Some(f) => Some((f.clone())(count)),
+        Some(f) => Some((f.clone())(*count)),
         None => None,
     });
 
-    assert_eq!(machine.state(), None);
+    assert_eq!(*machine.state(), None);
 
-    machine.traverse(&CountDialogAction::Display(Action::Decrement));
+    machine.traverse(CountDialogAction::Display(Action::Decrement));
 
-    assert_eq!(machine.state(), None);
+    assert_eq!(*machine.state(), None);
 
-    machine.traverse(&CountDialogAction::Buttons(ModalAction::Ok));
+    machine.traverse(CountDialogAction::Buttons(ModalAction::Ok));
 
-    assert_eq!(machine.state(), Some(ModalResult::Ok(-1)));
+    assert_eq!(*machine.state(), Some(ModalResult::Ok(-1)));
 
     let contents = counter().lift(&counter_prism);
 
     let dialog = modal().lift(&modal_prism);
 
     let mut machine = dialog.zip_with(contents, |dialog_state, count| match dialog_state {
-        Some(f) => Some((f.clone())(count)),
+        Some(f) => Some((f.clone())(*count)),
         None => None,
     });
 
-    assert_eq!(machine.state(), None);
+    assert_eq!(*machine.state(), None);
 
-    machine.traverse(&CountDialogAction::Display(Action::Increment));
+    machine.traverse(CountDialogAction::Display(Action::Increment));
 
-    assert_eq!(machine.state(), None);
+    assert_eq!(*machine.state(), None);
 
-    machine.traverse(&CountDialogAction::Buttons(ModalAction::Ok));
+    machine.traverse(CountDialogAction::Buttons(ModalAction::Ok));
 
-    assert_eq!(machine.state(), Some(ModalResult::Ok(1)));
+    assert_eq!(*machine.state(), Some(ModalResult::Ok(1)));
 }

@@ -27,8 +27,8 @@ pub fn counter() -> impl Machine<i32, Transition = Action> {
 fn counter_example() {
     let mut machine = counter();
 
-    assert_eq!(machine.state(), 0);
+    assert_eq!(*machine.state(), 0);
 
-    machine.traverse(&Action::Increment);
-    assert_eq!(machine.state(), 1);
+    machine.traverse(Action::Increment);
+    assert_eq!(*machine.state(), 1);
 }
