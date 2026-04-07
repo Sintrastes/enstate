@@ -10,7 +10,7 @@
 //! use enstate::integration::Vec2;
 //!
 //! // Convert direction angle to velocity vector
-//! let mut velocity = arr(Vec2::zero(), |angle: &f32| {
+//! let mut velocity = arr(|angle: &f32| {
 //!     Vec2::new(angle.cos(), angle.sin())
 //! });
 //!
@@ -31,43 +31,49 @@ use core::marker::PhantomData;
 /// - `I` - The input type
 /// - `O` - The output type
 /// - `F` - The transformation function type
-pub struct Arr<I: Clone, O: Clone, F> {
+#[derive(Debug, Clone, Copy)]
+pub struct Arr<I: Clone, O: Clone, F: Send> {
     f: F,
-    last_output: O,
+    last_output: Option<O>,
     _phantom: PhantomData<I>,
 }
 
-impl<I: Clone, O: Clone, F: FnMut(&I) -> O> Machine<O> for Arr<I, O, F> {
-    type Transition = I;
-
-    fn edges(&self) -> impl Iterator<Item = Self::Transition> {
+impl<I: Clone + Send + Sync, O: Clone + Send + Sync, F: FnMut(&I) -> O + Send + Sync + Clone>
+    Machine<I, O> for Arr<I, O, F>
+{
+    fn edges(&self) -> impl Iterator<Item = I> {
         // Arrow machines accept any input
         core::iter::empty()
     }
 
-    fn state(&self) -> &O {
-        &self.last_output
+    fn state(&mut self) -> &O {
+        &self.last_output.as_ref().unwrap()
     }
 
-    fn traverse(&mut self, event: Self::Transition) {
-        self.last_output = (self.f)(&event);
+    fn traverse(&mut self, event: I) {
+        self.last_output = Some((self.f)(&event));
     }
 
-    fn traverse_ref(&mut self, event: &Self::Transition) {
-        self.last_output = (self.f)(event);
+    fn traverse_ref(&mut self, event: &I) {
+        self.last_output = Some((self.f)(event));
     }
 }
 
 /// Creates a stateless transformation machine.
 ///
 /// # Arguments
-/// - `initial` - The initial output value (before any input is processed)
 /// - `f` - The transformation function to apply to each input
 ///
-pub fn arr<I: Clone, O: Clone, F: FnMut(&I) -> O>(initial: O, f: F) -> Arr<I, O, F> {
+pub fn arr<
+    I: Clone + Send + Sync,
+    O: Clone + Send + Sync,
+    F: FnMut(&I) -> O + Send + Sync + Clone,
+>(
+    f: F,
+) -> impl Machine<I, O> + Clone {
     Arr {
         f,
-        last_output: initial,
+        last_output: None,
         _phantom: PhantomData,
     }
 }

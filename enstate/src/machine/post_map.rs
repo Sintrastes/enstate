@@ -6,7 +6,6 @@
 //!
 
 use crate::machine::Machine;
-use core::cell::RefCell;
 use core::marker::PhantomData;
 
 /// A state machine that transforms output after getting from inner machine.
@@ -20,10 +19,11 @@ use core::marker::PhantomData;
 /// - `F` - The transformation function type
 /// - `T` - The inner machine's state type
 /// - `U` - The output state type (after transformation)
+#[derive(Debug, Clone, Copy)]
 pub(super) struct PostMap<M, F, T, U> {
     machine: M,
     f: F,
-    cached_state: RefCell<Option<U>>,
+    cached_state: Option<U>,
     _phantom_t: PhantomData<T>,
     _phantom_u: PhantomData<U>,
 }
@@ -38,51 +38,36 @@ impl<M, F, T, U> PostMap<M, F, T, U> {
         Self {
             machine,
             f,
-            cached_state: RefCell::new(None),
+            cached_state: None,
             _phantom_t: PhantomData,
             _phantom_u: PhantomData,
         }
     }
 }
 
-impl<M, F, T, U> Machine<U> for PostMap<M, F, T, U>
+impl<M, F, I: Send + Sync, T: Send + Sync + Clone, U: Send + Sync + Clone> Machine<I, U>
+    for PostMap<M, F, T, U>
 where
-    M: Machine<T>,
-    F: Fn(&T) -> U,
+    M: Machine<I, T>,
+    F: Fn(&T) -> U + Send + Sync + Clone,
 {
-    type Transition = M::Transition;
-
-    fn edges(&self) -> impl Iterator<Item = Self::Transition> {
+    fn edges(&self) -> impl Iterator<Item = I> {
         self.machine.edges()
     }
 
-    fn state(&self) -> &U {
+    fn state(&mut self) -> &U {
         let inner_state = self.machine.state();
-        let mut cache = self.cached_state.borrow_mut();
         let mapped = (self.f)(inner_state);
-        *cache = Some(mapped);
-        drop(cache);
+        self.cached_state = Some(mapped);
 
-        unsafe {
-            // SAFETY: We just updated the cache above, so it contains Some(U)
-            // The reference is valid for the lifetime of self
-            let cache_ref = self.cached_state.as_ptr();
-            (*cache_ref).as_ref().unwrap()
-        }
+        &self.cached_state.as_ref().unwrap()
     }
 
-    fn traverse(&mut self, event: Self::Transition) {
+    fn traverse(&mut self, event: I) {
         self.machine.traverse(event);
-        // Clear cache to force recomputation on next state() call
-        *self.cached_state.borrow_mut() = None;
     }
 
-    fn traverse_ref(&mut self, event: &Self::Transition)
-    where
-        Self::Transition: Clone,
-    {
+    fn traverse_ref(&mut self, event: &I) {
         self.machine.traverse_ref(event);
-        // Clear cache to force recomputation on next state() call
-        *self.cached_state.borrow_mut() = None;
     }
 }

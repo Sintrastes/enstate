@@ -1,0 +1,9 @@
+[package]
+name = "enstate-arrows"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+enstate-macros = { path = "../enstate-macros" }
+
+[dev-dependencies]

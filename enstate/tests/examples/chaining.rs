@@ -10,19 +10,19 @@ use crate::examples::{
 #[test]
 fn chained_modal_dialog_example() {
     let modal_prism = Prism::new(
-        |x| match x {
-            CountDialogAction::Buttons(modal_action) => Some(modal_action),
+        |x: &CountDialogAction| match x {
+            CountDialogAction::Buttons(modal_action) => Some(*modal_action),
             CountDialogAction::Display(_) => None,
         },
-        |x| CountDialogAction::Buttons(x),
+        |x: &ModalAction| CountDialogAction::Buttons(*x),
     );
 
     let counter_prism = Prism::new(
-        |x| match x {
+        |x: &CountDialogAction| match x {
             CountDialogAction::Buttons(_) => None,
-            CountDialogAction::Display(action) => Some(action),
+            CountDialogAction::Display(action) => Some(*action),
         },
-        |x| CountDialogAction::Display(x),
+        |x: &Action| CountDialogAction::Display(*x),
     );
 
     let dialog = || {
@@ -72,7 +72,7 @@ fn flat_map_with_pure_machines() {
     assert_eq!(*machine.state(), Some(10));
 
     // Test with None - flat_map won't be called since state is None
-    let machine2 = pure::<Option<i32>, Action>(None)
+    let mut machine2 = pure::<Option<i32>, Action>(None)
         .flat_map(|x: &i32| pure::<Option<i32>, Action>(Some(x * 2)));
 
     assert_eq!(*machine2.state(), None);

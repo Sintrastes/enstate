@@ -1,2 +1,2 @@
 [workspace]
-members = ["enstate", "enstate-macros"]
+members = ["enstate", "enstate-macros", "enstate-arrows"]

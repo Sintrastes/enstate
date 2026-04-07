@@ -12,24 +12,31 @@ pub trait IsLens<A, S> {
 ///
 /// Trait for objects that can act like a prism.
 ///
-pub trait IsPrism<A, S> {
-    fn downcast(&self, source: S) -> Option<A>;
+pub trait IsPrism<A, S>: Send + Clone {
+    fn downcast(&self, source: &S) -> Option<A>;
 
-    fn upcast(&self, value: A) -> S;
+    fn upcast(&self, value: &A) -> S;
 }
 
 ///
 /// Struct for a basic prism which implements the
 ///  IsPrism trait.
 ///
-pub struct Prism<S, A, F: Fn(S) -> Option<A>, G: Fn(A) -> S> {
+#[derive(Clone)]
+pub struct Prism<S, A, F: Fn(&S) -> Option<A>, G: Fn(&A) -> S> {
     s: PhantomData<S>,
     a: PhantomData<A>,
     downcast: F,
     upcast: G,
 }
 
-impl<S, A, F: Fn(S) -> Option<A>, G: Fn(A) -> S> Prism<S, A, F, G> {
+impl<
+    S: Send + Clone,
+    A: Send + Clone,
+    F: Fn(&S) -> Option<A> + Send + Clone,
+    G: Fn(&A) -> S + Send + Clone,
+> Prism<S, A, F, G>
+{
     ///
     /// Build a new prism by specifying a downcast and upcast operation.
     ///
@@ -43,12 +50,18 @@ impl<S, A, F: Fn(S) -> Option<A>, G: Fn(A) -> S> Prism<S, A, F, G> {
     }
 }
 
-impl<S, A, F: Fn(S) -> Option<A>, G: Fn(A) -> S> IsPrism<A, S> for Prism<S, A, F, G> {
-    fn downcast(&self, source: S) -> Option<A> {
+impl<
+    S: Send + Clone,
+    A: Send + Clone,
+    F: Fn(&S) -> Option<A> + Send + Clone,
+    G: Fn(&A) -> S + Send + Clone,
+> IsPrism<A, S> for Prism<S, A, F, G>
+{
+    fn downcast(&self, source: &S) -> Option<A> {
         (self.downcast)(source)
     }
 
-    fn upcast(&self, value: A) -> S {
+    fn upcast(&self, value: &A) -> S {
         (self.upcast)(value)
     }
 }

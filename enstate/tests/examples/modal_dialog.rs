@@ -36,11 +36,7 @@ impl Default for ModalAction {
 ///  with other machines to construct the state machine for a generic modal
 ///  dialog.
 ///
-/// This implementation requires a bit overhead (Rc and trait objects), but perhaps
-///  there is a way to improve on this.
-///
-pub fn modal<T: Clone>() -> impl Chainable<Option<fn(T) -> ModalResult<T>>, Transition = ModalAction>
-{
+pub fn modal<T: Clone>() -> impl Chainable<ModalAction, Option<fn(T) -> ModalResult<T>>> + Clone {
     machine_chain!(|| {
         let action = yield [ModalAction::Ok, ModalAction::Cancel].as_slice();
 
@@ -54,19 +50,19 @@ pub fn modal<T: Clone>() -> impl Chainable<Option<fn(T) -> ModalResult<T>>, Tran
 #[test]
 fn modal_dialog_example() {
     let modal_prism = Prism::new(
-        |x| match x {
-            CountDialogAction::Buttons(modal_action) => Some(modal_action),
+        |x: &CountDialogAction| match x {
+            CountDialogAction::Buttons(modal_action) => Some(*modal_action),
             CountDialogAction::Display(_) => None,
         },
-        |x| CountDialogAction::Buttons(x),
+        |x: &ModalAction| CountDialogAction::Buttons(*x),
     );
 
     let counter_prism = Prism::new(
-        |x| match x {
+        |x: &CountDialogAction| match x {
             CountDialogAction::Buttons(_) => None,
-            CountDialogAction::Display(action) => Some(action),
+            CountDialogAction::Display(action) => Some(*action),
         },
-        |x| CountDialogAction::Display(x),
+        |x: &Action| CountDialogAction::Display(*x),
     );
 
     let contents = counter().lift(&counter_prism);
@@ -74,7 +70,7 @@ fn modal_dialog_example() {
     let dialog = modal().lift(&modal_prism);
 
     let mut machine = dialog.zip_with(contents, |dialog_state, count| match dialog_state {
-        Some(f) => Some((f.clone())(*count)),
+        Some(f) => Some(f(*count)),
         None => None,
     });
 
@@ -93,7 +89,7 @@ fn modal_dialog_example() {
     let dialog = modal().lift(&modal_prism);
 
     let mut machine = dialog.zip_with(contents, |dialog_state, count| match dialog_state {
-        Some(f) => Some((f.clone())(*count)),
+        Some(f) => Some(f(*count)),
         None => None,
     });
 

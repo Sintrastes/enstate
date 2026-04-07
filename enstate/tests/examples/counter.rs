@@ -13,7 +13,7 @@ impl Default for Action {
     }
 }
 
-pub fn counter() -> impl Machine<i32, Transition = Action> {
+pub fn counter() -> impl Machine<Action, i32> + Clone {
     machine!(count, 0, || {
         let action = choose![Action::Increment, Action::Decrement];
         match action {

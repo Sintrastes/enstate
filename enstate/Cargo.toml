@@ -3,9 +3,13 @@ name = "enstate"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+default = []
+std = ["dep:parking_lot"]
+
 [dependencies]
 enstate-macros = { path = "../enstate-macros" }
 unhygienic2 = "0.1.0"
-
 # For integration support in no_std
 libm = "0.2.16"
+parking_lot = { version = "0.12.5", optional = true }

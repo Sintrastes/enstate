@@ -1,56 +1,45 @@
-use core::{cell::RefCell, marker::PhantomData};
+use core::marker::PhantomData;
 
 use super::Machine;
 
-#[derive(Clone)]
+#[derive(Debug, Clone, Copy)]
 pub(crate) struct ZippedMachine<T, U, M1, M2, F, V> {
     pub(crate) t: PhantomData<T>,
     pub(crate) u: PhantomData<U>,
     pub(crate) machine1: M1,
     pub(crate) machine2: M2,
     pub(crate) f: F,
-    pub(crate) cached_state: RefCell<Option<V>>,
+    pub(crate) cached_state: Option<V>,
 }
 
-impl<M1, M2, F, T, U, V> Machine<V> for ZippedMachine<T, U, M1, M2, F, V>
+impl<M1, M2, F, I: Send, T: Send + Sync + Clone, U: Send + Sync + Clone, V: Send + Sync + Clone>
+    Machine<I, V> for ZippedMachine<T, U, M1, M2, F, V>
 where
-    M1: Machine<T>,
-    M2: Machine<U, Transition = M1::Transition>,
-    M1::Transition: Clone,
-    F: Fn(&T, &U) -> V,
-    V: Clone,
+    M1: Machine<I, T>,
+    M2: Machine<I, U>,
+    I: Clone,
+    F: Fn(&T, &U) -> V + Send + Sync + Clone,
 {
-    type Transition = M1::Transition;
-
-    fn edges(&self) -> impl Iterator<Item = M1::Transition> {
-        self.machine1.edges()
+    fn edges(&self) -> impl Iterator<Item = I> {
+        self.machine1.edges().chain(self.machine2.edges())
     }
 
-    fn state(&self) -> &V {
+    fn state(&mut self) -> &V {
         let state1 = self.machine1.state();
         let state2 = self.machine2.state();
 
-        let mut cache = self.cached_state.borrow_mut();
         let mapped = (self.f)(state1, state2);
-        *cache = Some(mapped);
-        drop(cache);
+        self.cached_state = Some(mapped);
 
-        unsafe {
-            // SAFETY: We just updated the cache above, so it contains Some(V)
-            // The reference is valid for the lifetime of self
-            let cache_ref = self.cached_state.as_ptr();
-            (*cache_ref).as_ref().unwrap()
-        }
+        &self.cached_state.as_ref().unwrap()
     }
 
-    fn traverse(&mut self, edge: M1::Transition) {
+    fn traverse(&mut self, edge: I) {
         self.traverse_ref(&edge);
     }
 
-    fn traverse_ref(&mut self, edge: &M1::Transition) {
+    fn traverse_ref(&mut self, edge: &I) {
         self.machine1.traverse_ref(edge);
         self.machine2.traverse_ref(edge);
-        // Clear cache to force recomputation on next state() call
-        *self.cached_state.borrow_mut() = None;
     }
 }

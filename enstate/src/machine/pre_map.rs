@@ -20,6 +20,7 @@ use core::marker::PhantomData;
 /// - `F` - The transformation function type
 /// - `I` - The input transition type (before transformation)
 /// - `T` - The state type (from inner machine)
+#[derive(Debug, Clone, Copy)]
 pub(super) struct PreMap<M, F, I, T> {
     machine: M,
     f: F,
@@ -43,28 +44,27 @@ impl<M, F, I, T> PreMap<M, F, I, T> {
     }
 }
 
-impl<M, F, I, T> Machine<T> for PreMap<M, F, I, T>
+impl<M, F, X: Send, I: Send + Sync + Clone, T: Send + Sync + Clone> Machine<I, T>
+    for PreMap<M, F, I, T>
 where
-    M: Machine<T>,
-    F: FnMut(&I) -> M::Transition,
+    M: Machine<X, T>,
+    F: FnMut(&I) -> X + Send + Sync + Clone,
 {
-    type Transition = I;
-
-    fn edges(&self) -> impl Iterator<Item = Self::Transition> {
+    fn edges(&self) -> impl Iterator<Item = I> {
         // PreMap machines accept any input of type I
         core::iter::empty()
     }
 
-    fn state(&self) -> &T {
+    fn state(&mut self) -> &T {
         self.machine.state()
     }
 
-    fn traverse(&mut self, event: Self::Transition) {
+    fn traverse(&mut self, event: I) {
         let transformed = (self.f)(&event);
         self.machine.traverse(transformed);
     }
 
-    fn traverse_ref(&mut self, event: &Self::Transition) {
+    fn traverse_ref(&mut self, event: &I) {
         let transformed = (self.f)(event);
         self.machine.traverse(transformed);
     }

@@ -10,21 +10,24 @@ use core::marker::PhantomData;
 /// # Example
 /// ```
 /// use enstate::machine::accumulator::accumulator;
+/// use enstate::machine::accumulator_mut::accumulator_mut;
 ///
 /// // Sum all input values
 /// let sum = accumulator(0, |acc: &i32, val: &i32| acc + val);
 ///
 /// // Collect all events into a vector
-/// let collector = accumulator(Vec::new(), |acc: &Vec<i32>, item: &i32| {
-///     let mut new_acc = acc.clone();
-///     new_acc.push(*item);
-///     new_acc
+/// let collector = accumulator_mut(Vec::new(), |acc: &mut Vec<i32>, item: &i32| {
+///     acc.push(*item);
 /// });
 /// ```
-pub fn accumulator<T: Clone, E, F: FnMut(&T, &E) -> T>(
+pub fn accumulator<
+    T: Clone + Send + Sync,
+    E: Send + Sync + Clone,
+    F: FnMut(&T, &E) -> T + Send + Sync + Clone,
+>(
     initial: T,
     f: F,
-) -> impl Machine<T, Transition = E> {
+) -> impl Machine<E, T> + Clone {
     Accumulator {
         state: initial,
         f,
@@ -32,29 +35,30 @@ pub fn accumulator<T: Clone, E, F: FnMut(&T, &E) -> T>(
     }
 }
 
+#[derive(Debug, Clone, Copy)]
 struct Accumulator<T: Clone, E, F> {
     state: T,
     f: F,
     _phantom: PhantomData<E>,
 }
 
-impl<T: Clone, E, F: FnMut(&T, &E) -> T> Machine<T> for Accumulator<T, E, F> {
-    type Transition = E;
-
-    fn edges(&self) -> impl Iterator<Item = Self::Transition> {
+impl<T: Clone + Send + Sync, E: Send + Sync + Clone, F: FnMut(&T, &E) -> T + Send + Sync + Clone>
+    Machine<E, T> for Accumulator<T, E, F>
+{
+    fn edges(&self) -> impl Iterator<Item = E> {
         // Accumulator machines accept any input
         core::iter::empty()
     }
 
-    fn state(&self) -> &T {
+    fn state(&mut self) -> &T {
         &self.state
     }
 
-    fn traverse(&mut self, event: Self::Transition) {
+    fn traverse(&mut self, event: E) {
         self.state = (self.f)(&self.state, &event);
     }
 
-    fn traverse_ref(&mut self, event: &Self::Transition) {
+    fn traverse_ref(&mut self, event: &E) {
         self.state = (self.f)(&self.state, event);
     }
 }

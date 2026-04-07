@@ -7,19 +7,16 @@
 //! # Example
 //! ```
 //! use enstate::machine::Machine;
-//! use enstate::machine::integral::{integral, IntegralInput};
-//! use enstate::integration::Vec2;
+//! use enstate::machine::integral::{integral};
+//! use enstate::integration::{Vec2, DeltaTime};
 //!
 //! // Integrate velocity to get position
 //! let mut position = integral(Vec2::zero());
 //!
-//! position.traverse(IntegralInput {
-//!     value: Vec2::new(1.0, 0.0),
-//!     dt: 0.1,
-//! });
+//! position.traverse((Vec2::new(1.0, 0.0), DeltaTime::from_seconds(0.1)));
 //! ```
 
-use crate::integration::{Integrable, IntegratedState};
+use crate::integration::{DeltaTime, Integrable, IntegratedState};
 use crate::machine::Machine;
 
 /// A state machine that integrates its input over time using the trapezoid rule.
@@ -30,6 +27,7 @@ use crate::machine::Machine;
 ///
 /// # Type Parameters
 /// - `T` - The type being integrated, must implement `Integrable`
+#[derive(Debug, Clone, Copy)]
 pub struct Integral<T: Integrable> {
     state: IntegratedState<T>,
 }
@@ -49,34 +47,24 @@ impl<T: Integrable> Integral<T> {
     }
 }
 
-/// Input event for integration containing the value to integrate and time step.
-#[derive(Debug, Clone, Copy)]
-pub struct IntegralInput<T> {
-    /// The value to integrate at this time step
-    pub value: T,
-    /// The time delta for this integration step
-    pub dt: f32,
-}
-
-impl<T: Integrable> Machine<T> for Integral<T> {
-    // TODO: Need to make this generic somehow?
-    type Transition = IntegralInput<T>;
-
-    fn edges(&self) -> impl Iterator<Item = Self::Transition> {
+impl<T: Integrable + Send + Sync> Machine<(T, DeltaTime), T> for Integral<T> {
+    fn edges(&self) -> impl Iterator<Item = (T, DeltaTime)> {
         // Integration machines accept any input
         core::iter::empty()
     }
 
-    fn state(&self) -> &T {
+    fn state(&mut self) -> &T {
         &self.state.value
     }
 
-    fn traverse(&mut self, event: Self::Transition) {
-        self.state.update(event.value, event.dt);
+    fn traverse(&mut self, event: (T, DeltaTime)) {
+        let (value, dt) = event;
+        self.state.update(value, dt);
     }
 
-    fn traverse_ref(&mut self, event: &Self::Transition) {
-        self.state.update(event.value, event.dt);
+    fn traverse_ref(&mut self, event: &(T, DeltaTime)) {
+        let (value, dt) = event;
+        self.state.update(*value, *dt);
     }
 }
 
@@ -92,6 +80,8 @@ impl<T: Integrable> Machine<T> for Integral<T> {
 /// // Integrate acceleration to get velocity
 /// let velocity = integral(Vec2::zero());
 /// ```
-pub fn integral<T: Integrable>(initial: T) -> Integral<T> {
+pub fn integral<T: Integrable + Send + Sync>(
+    initial: T,
+) -> impl Machine<(T, DeltaTime), T> + Clone {
     Integral::new(initial)
 }

@@ -1,4 +1,4 @@
-use crate::machine::Machine;
+use crate::machine::{Machine, event::Event};
 use core::marker::PhantomData;
 
 /// Creates an accumulating state machine.
@@ -16,16 +16,18 @@ use core::marker::PhantomData;
 /// let sum = accumulator_mut(0, |acc: &mut i32, val: &i32| *acc = *acc + val);
 ///
 /// // Collect all events into a vector
-/// let collector = accumulator(Vec::new(), |acc: &Vec<i32>, item: &i32| {
-///     let mut new_acc = acc.clone();
-///     new_acc.push(*item);
-///     new_acc
+/// let collector = accumulator_mut(Vec::new(), |acc: &mut Vec<i32>, item: &i32| {
+///     acc.push(*item);
 /// });
 /// ```
-pub fn accumulator_mut<T: Clone, E, F: FnMut(&mut T, &E) -> ()>(
+pub fn accumulator_mut<
+    T: Clone + Send + Sync,
+    E: Send + Sync + Clone,
+    F: FnMut(&mut T, &E) -> () + Send + Sync + Clone,
+>(
     initial: T,
     f: F,
-) -> impl Machine<T, Transition = E> {
+) -> impl Machine<E, T> + Clone {
     AccumulatorMut {
         state: initial,
         f,
@@ -33,29 +35,56 @@ pub fn accumulator_mut<T: Clone, E, F: FnMut(&mut T, &E) -> ()>(
     }
 }
 
+pub fn foldp<
+    T: Clone + Send + Sync,
+    I: Send + Clone,
+    E: Send + Clone + Sync,
+    F: FnMut(&mut T, &E) -> () + Send + Sync + Clone + 'static,
+    M,
+>(
+    initial: T,
+    event: M,
+    mut f: F,
+) -> impl Machine<I, T> + Clone
+where
+    M: Machine<I, Event<E>> + Clone + Sync,
+{
+    event.pipe(accumulator_mut(
+        initial,
+        move |state, event: &Event<E>| match event {
+            Event::Event(event) => f(state, event),
+            _ => (),
+        },
+    ))
+}
+
+#[derive(Debug, Clone, Copy)]
 struct AccumulatorMut<T: Clone, E, F> {
     state: T,
     f: F,
     _phantom: PhantomData<E>,
 }
 
-impl<T: Clone, E, F: FnMut(&mut T, &E) -> ()> Machine<T> for AccumulatorMut<T, E, F> {
-    type Transition = E;
-
-    fn edges(&self) -> impl Iterator<Item = Self::Transition> {
+impl<
+    T: Clone + Send + Sync,
+    E: Send + Sync + Clone,
+    F: FnMut(&mut T, &E) -> () + Send + Sync + Clone,
+> Machine<E, T> for AccumulatorMut<T, E, F>
+{
+    fn edges(&self) -> impl Iterator<Item = E> {
         // Accumulator machines accept any input
         core::iter::empty()
     }
 
-    fn state(&self) -> &T {
+    fn state(&mut self) -> &T {
         &self.state
     }
 
-    fn traverse(&mut self, event: Self::Transition) {
+    fn traverse(&mut self, event: E) {
         (self.f)(&mut self.state, &event);
     }
 
-    fn traverse_ref(&mut self, event: &Self::Transition) {
+    fn traverse_ref(&mut self, event: &E) {
         (self.f)(&mut self.state, event);
     }
 }

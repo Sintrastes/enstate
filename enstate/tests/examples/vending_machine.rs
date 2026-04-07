@@ -14,7 +14,7 @@ impl Default for VendingAction {
     }
 }
 
-fn vending_machine() -> impl Machine<u32, Transition = VendingAction> {
+fn vending_machine() -> impl Machine<VendingAction, u32> + Clone {
     machine!(coins, 0, || {
         let action = choose![
             VendingAction::InsertCoin,

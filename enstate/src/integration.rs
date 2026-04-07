@@ -3,6 +3,7 @@
 //! These utilities allow building state machines that integrate velocities
 //! into positions smoothly over time, which is essential for game physics.
 
+use core::ops::Div;
 use core::ops::{Add, Mul};
 
 /// Trait for types that support trapezoid rule integration.
@@ -15,11 +16,22 @@ pub trait Integrable: Copy + Add<Output = Self> + Mul<f32, Output = Self> {
         &self,
         prev_derivative: &Self,
         current_derivative: &Self,
-        dt: f32,
+        dt: DeltaTime,
     ) -> Self {
         // Trapezoid rule: x_new = x_old + dt * (v_old + v_new) / 2
         let avg_derivative = *prev_derivative + *current_derivative;
-        *self + avg_derivative * (dt / 2.0)
+        *self + avg_derivative * (dt.seconds / 2.0)
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct DeltaTime {
+    pub seconds: f32,
+}
+
+impl DeltaTime {
+    pub fn from_seconds(seconds: f32) -> DeltaTime {
+        DeltaTime { seconds }
     }
 }
 
@@ -78,12 +90,23 @@ impl Mul<f32> for Vec2 {
     }
 }
 
+impl Div<f32> for Vec2 {
+    type Output = Self;
+
+    fn div(self, rhs: f32) -> Self {
+        Self {
+            x: self.x / rhs,
+            y: self.y / rhs,
+        }
+    }
+}
+
 impl Integrable for Vec2 {}
 
 impl Integrable for f32 {}
 
 /// State that tracks both a value and its derivative for integration.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct IntegratedState<T: Integrable> {
     pub value: T,
     pub derivative: T,
@@ -100,7 +123,7 @@ impl<T: Integrable> IntegratedState<T> {
     }
 
     /// Update the derivative and integrate to get the new value.
-    pub fn update(&mut self, new_derivative: T, dt: f32) {
+    pub fn update(&mut self, new_derivative: T, dt: DeltaTime) {
         self.value = self
             .value
             .integrate_trapezoid(&self.prev_derivative, &new_derivative, dt);

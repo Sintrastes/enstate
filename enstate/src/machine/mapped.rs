@@ -1,4 +1,4 @@
-use core::{cell::RefCell, marker::PhantomData};
+use core::marker::PhantomData;
 
 use super::Machine;
 
@@ -8,50 +8,41 @@ use super::Machine;
 /// T is the input state type from the inner machine
 /// U is the output state type after mapping
 ///
+#[derive(Debug, Clone, Copy)]
 pub(super) struct MappedMachine<U, M, F, T> {
     pub(super) u: PhantomData<U>,
     pub(super) t: PhantomData<T>,
     pub(super) machine: M,
     pub(super) f: F,
-    pub(super) cached_state: RefCell<Option<U>>,
+    pub(super) cached_state: Option<U>,
 }
 
-impl<M, F, T, U> Machine<U> for MappedMachine<U, M, F, T>
+impl<M, F, I: Send + Sync, T: Send + Sync + Clone, U: Send + Sync + Clone> Machine<I, U>
+    for MappedMachine<U, M, F, T>
 where
-    M: Machine<T>,
-    F: Fn(&T) -> U,
+    M: Machine<I, T>,
+    F: Fn(&T) -> U + Send + Sync + Clone,
 {
-    type Transition = M::Transition;
-
-    fn edges(&self) -> impl Iterator<Item = M::Transition> {
+    fn edges(&self) -> impl Iterator<Item = I> {
         self.machine.edges()
     }
 
-    fn state(&self) -> &U {
+    fn state(&mut self) -> &U {
         let machine_state = self.machine.state();
-        let mut cache = self.cached_state.borrow_mut();
 
         // Update cache with the mapped state
         let mapped = (self.f)(machine_state);
-        *cache = Some(mapped);
+        self.cached_state = Some(mapped);
 
-        // Now we need to return a reference to the cached value
-        // This requires unsafe code or a different approach
-        // Let's drop the mutable borrow and get an immutable reference
-        drop(cache);
-
-        unsafe {
-            // SAFETY: We just updated the cache above, so it contains Some(U)
-            // The reference is valid for the lifetime of self
-            let cache_ref = self.cached_state.as_ptr();
-            (*cache_ref).as_ref().unwrap()
-        }
+        &self.cached_state.as_ref().unwrap()
     }
 
-    fn traverse(&mut self, edge: Self::Transition) {
-        self.machine.traverse(edge);
-        // Clear cache to force recomputation on next state() call
-        *self.cached_state.borrow_mut() = None;
+    fn traverse(&mut self, edge: I) {
+        self.machine.traverse_ref(&edge);
+    }
+
+    fn traverse_ref(&mut self, edge: &I) {
+        self.machine.traverse_ref(&edge);
     }
 }
 
@@ -59,6 +50,7 @@ where
 /// MappedTransitionMachine allows for mapping Machine transition type into another type while maintaining
 /// the same semantics.
 ///
+#[derive(Debug, Clone, Copy)]
 pub(super) struct MappedTransitionMachine<T, M, F, G> {
     pub(super) t: PhantomData<T>,
     pub(super) machine: M,
@@ -66,25 +58,28 @@ pub(super) struct MappedTransitionMachine<T, M, F, G> {
     pub(super) g: G,
 }
 
-impl<M, F, G, T, U, V> Machine<T> for MappedTransitionMachine<T, M, F, G>
+impl<M, F: Send + Sync + Clone, G: Send + Sync + Clone, T: Send + Sync + Clone, U: Send, V: Send>
+    Machine<V, T> for MappedTransitionMachine<T, M, F, G>
 where
-    M: Machine<T, Transition = U>,
-    F: Fn(U) -> V,
-    G: Fn(V) -> Option<U>,
+    M: Machine<U, T>,
+    F: Fn(&U) -> V,
+    G: Fn(&V) -> Option<U>,
 {
-    type Transition = V;
-
-    fn edges(&self) -> impl Iterator<Item = Self::Transition> {
-        self.machine.edges().map(|e| (self.f)(e))
+    fn edges(&self) -> impl Iterator<Item = V> {
+        self.machine.edges().map(|e| (self.f)(&e))
     }
 
-    fn state(&self) -> &T {
+    fn state(&mut self) -> &T {
         self.machine.state()
     }
 
-    fn traverse(&mut self, edge: Self::Transition) {
-        if let Some(inner_edge) = (self.g)(edge) {
-            self.machine.traverse(inner_edge);
+    fn traverse(&mut self, edge: V) {
+        self.traverse_ref(&edge);
+    }
+
+    fn traverse_ref(&mut self, edge: &V) {
+        if let Some(inner_edge) = &mut (self.g)(edge) {
+            self.machine.traverse_ref(inner_edge);
         }
     }
 }

@@ -10,5 +10,6 @@ mod examples {
     mod chaining;
     mod counter;
     mod modal_dialog;
+    mod proc_machines;
     mod vending_machine;
 }
